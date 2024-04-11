@@ -1,7 +1,7 @@
 {
   "id": "dark-heresy",
-  "title": "Dark Heresy 2E",
-  "description": "Unofficial Foundry VTT System for Dark Heresy 2nd Edition.",
+  "title": "Dark Heresy 1E",
+  "description": "Unofficial Foundry VTT System for Dark Heresy 1st Edition.",
   "version": "4.2.9",
   "minimumCoreVersion" : 11,
   "compatibility" : {

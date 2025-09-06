@@ -3,11 +3,11 @@
   "title": "Dark Heresy 1E",
   "description": "Unofficial Foundry VTT System for Dark Heresy 1st Edition.",
   "version": "4.2.9",
-  "minimumCoreVersion" : 11,
+  "minimumCoreVersion" : 12,
   "compatibility" : {
     "minimum" : 11,
-    "verified" : 11,
-    "maximum" : 11
+    "verified" : 12,
+    "maximum" : 12
   },
   "templateVersion": 2,
   "authors": [

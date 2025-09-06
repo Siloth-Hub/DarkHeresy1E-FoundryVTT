@@ -68,7 +68,7 @@
   "secondaryTokenAttribute": null,
   "url": "https://github.com/Vendare/DarkHeresy2E-FoundryVTT",
   "socket": true,
-  "manifest": "https://github.com/Vendare/DarkHeresy2E-FoundryVTT/releases/download/4.2.9/system.json",
+  "manifest": "https://raw.githubusercontent.com/Siloth-Hub/DarkHeresy1E-FoundryVTT/refs/heads/master/system.json",
   "download": "https://github.com/Vendare/DarkHeresy2E-FoundryVTT/releases/download/4.2.9/dark-heresy.zip",
   "license": "LICENSE.txt"
 }

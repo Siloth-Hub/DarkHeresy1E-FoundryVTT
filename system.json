@@ -19,11 +19,11 @@
     { "name": "Giddy" },
     { "name": "Dazzerix" },
     { "name": "FilippoPolo" },
-    { "name": "Silot" }
+    { "name": "Siloth" }
   ],
   "scripts": [],
   "esmodules": ["script/dark-heresy.js"],
-  "styles": [],
+  "styles": ["css/dark-heresy.css"],
   "packs": [
     {
       "name": "character-aptitudes",

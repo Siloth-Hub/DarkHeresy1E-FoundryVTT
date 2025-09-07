@@ -37,6 +37,7 @@ Hooks.once("init", () => {
   CONFIG.Combat.initiative = { formula: "@initiative.base + @initiative.bonus", decimals: 0 };
   CONFIG.Actor.documentClass = DarkHeresyActor;
   CONFIG.Item.documentClass = DarkHeresyItem;
+  CONFIG.statusEffects = Dh.statusEffects(game.system.id);
 
   // Font (ok to leave empty font list if you just need the name available in editors)
   CONFIG.fontDefinitions["Caslon Antique"] = { editor: true, fonts: [] };

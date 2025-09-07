@@ -19,11 +19,11 @@
     { "name": "Giddy" },
     { "name": "Dazzerix" },
     { "name": "FilippoPolo" },
-    { "name": "Siloth" }
+    { "name": "Silot" }
   ],
   "scripts": [],
   "esmodules": ["script/dark-heresy.js"],
-  "styles": ["css/dark-heresy.css"],
+  "styles": [],
   "packs": [
     {
       "name": "character-aptitudes",
@@ -39,7 +39,7 @@
     { "lang": "fr", "name": "Français", "path": "lang/fr.json" },
     { "lang": "pl", "name": "Polski", "path": "lang/pl.json" }
   ],
-  "grid": { "distance": 1, "units": "m" }
+  "grid": { "distance": 1, "units": "m" },
   "primaryTokenAttribute": null,
   "secondaryTokenAttribute": null,
   "url": "https://github.com/Siloth-Hub/DarkHeresy1E-FoundryVTT",

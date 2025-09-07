@@ -18,9 +18,9 @@
     { "name": "Silver292" },
     { "name": "Giddy" },
     { "name": "Dazzerix" },
-    { "name": "FilippoPolo" }
-    { "name": "Siloth" }
-  ],
+    { "name": "FilippoPolo" },
+    { "name": "Siloth" }]
+    
   "scripts": [],
   "esmodules": [
     "script/dark-heresy.js"

@@ -1,191 +1,209 @@
+// systems/dark-heresy-1e/script/common/chat.js
 import { commonRoll, combatRoll, damageRoll } from "./roll.js";
 import { prepareCommonRoll } from "./dialog.js";
 import DarkHeresyUtil from "./util.js";
 
-
 /**
- * Listeners for Chatmessages
- * @param {HTMLElement} html
+ * Attach listeners to the ChatLog root (HTMLElement). v12 uses native DOM, not jQuery.
+ * We use a single delegated click handler like jQuery's old .on().
  */
-export function chatListeners(html) {
-    html.on("click", ".invoke-test", onTestClick.bind(this));
-    html.on("click", ".invoke-damage", onDamageClick.bind(this));
-    html.on("click", ".reload-Weapon", onReloadClick.bind(this));
-}
+export function chatListeners(rootEl) {
+  const handler = (ev) => {
+    // Buttons inside chat cards
+    if (ev.target.closest(".invoke-test"))   return onTestClick(ev);
+    if (ev.target.closest(".invoke-damage")) return onDamageClick(ev);
+    if (ev.target.closest(".reload-Weapon")) return onReloadClick(ev);
 
-/**
- * This function is used to hook into the Chat Log context menu to add additional options to each message
- * These options make it easy to conveniently apply damage to controlled tokens based on the value of a Roll
- *
- * @param {HTMLElement} html    The Chat Message being rendered
- * @param {Array} options       The Array of Context Menu options
- *
- * @returns {Array}              The extended options Array including new context choices
- */
-export const addChatMessageContextOptions = function(html, options) {
-    let canApply = li => {
-        const message = game.messages.get(li.data("messageId"));
-        return message.getRollData()?.isDamageRoll
-            && message.isContentVisible
-            && canvas.tokens.controlled.length;
-    };
-    options.push(
-        {
-            name: game.i18n.localize("CHAT.CONTEXT.APPLY_DAMAGE"),
-            icon: '<i class="fas fa-user-minus"></i>',
-            condition: canApply,
-            callback: li => applyChatCardDamage(li)
-        }
-    );
-
-    let canReroll = li => {
-        const message = game.messages.get(li.data("messageId"));
-        let actor = game.actors.get(message.getRollData()?.ownerId);
-        return message.isRoll
-            && !message.getRollData()?.isDamageRoll
-            && message.isContentVisible
-            && actor?.fate.value > 0;
-    };
-
-    options.push(
-        {
-            name: game.i18n.localize("CHAT.CONTEXT.REROLL"),
-            icon: '<i class="fa-solid fa-repeat"></i>',
-            condition: canReroll,
-            callback: li => {
-                const message = game.messages.get(li.data("messageId"));
-                rerollTest(message.getRollData());
-            }
-        }
-    );
-    return options;
-};
-
-/**
- * Apply rolled dice damage to the token or tokens which are currently controlled.
- * This allows for damage to be scaled by a multiplier to account for healing, critical hits, or resistance
- *
- * @param {HTMLElement} roll    The chat entry which contains the roll data
- * @param {number} multiplier   A damage multiplier to apply to the rolled damage.
- * @returns {Promise}
- */
-function applyChatCardDamage(roll, multiplier) {
-    // Get the damage data, get them as arrays in case of multiple hits
-    const amount = roll.find(".damage-total");
-    const location = roll.find(".damage-location");
-    const penetration = roll.find(".damage-penetration");
-    const type = roll.find(".damage-type");
-    const righteousFury = roll.find(".damage-righteous-fury");
-
-    // Put the data from different hits together
-    const damages = [];
-    for (let i = 0; i < amount.length; i++) {
-        damages.push({
-            amount: $(amount[i]).text(),
-            location: $(location[i]).data("location"),
-            penetration: $(penetration[i]).text(),
-            type: $(type[i]).text(),
-            righteousFury: $(righteousFury[i]).text()
-        });
+    // Toggle dice details when clicking the background (your old showRolls behavior)
+    if (ev.target.closest(".dark-heresy.chat.roll .background.border")) {
+      return onChatRollClick(ev);
     }
+  };
 
-    // Apply to any selected actors
-    return Promise.all(canvas.tokens.controlled.map(t => {
-        const a = t.actor;
-        return a.applyDamage(damages);
-    }));
+  // Avoid double-binding
+  rootEl.removeEventListener("click", rootEl.__dh_clickHandler);
+  rootEl.__dh_clickHandler = handler;
+  rootEl.addEventListener("click", handler);
 }
 
 /**
- * Rerolls the Test using the same Data as the initial Roll while reducing an actors fate
- * @param {object} rollData
- * @returns {Promise}
+ * Context menu entries for chat messages (v12 signature is (chatLog, options)).
+ * Push entries onto options; don't try to bind DOM listeners here.
+ */
+export function addChatMessageContextOptions(chatLog, options) {
+  const canApply = (li) => {
+    const msg = game.messages.get(li.dataset.messageId);
+    return msg?.getRollData()?.isDamageRoll && msg?.isContentVisible && canvas.tokens.controlled.length > 0;
+  };
+
+  options.push({
+    name: game.i18n.localize("CHAT.CONTEXT.APPLY_DAMAGE"),
+    icon: '<i class="fas fa-user-minus"></i>',
+    condition: canApply,
+    callback: (li) => applyChatCardDamageFromLi(li)
+  });
+
+  const canReroll = (li) => {
+    const msg = game.messages.get(li.dataset.messageId);
+    const actor = game.actors.get(msg?.getRollData()?.ownerId);
+    return !!(msg?.isRoll && !msg.getRollData()?.isDamageRoll && msg?.isContentVisible && actor?.fate?.value > 0);
+  };
+
+  options.push({
+    name: game.i18n.localize("CHAT.CONTEXT.REROLL"),
+    icon: '<i class="fa-solid fa-repeat"></i>',
+    condition: canReroll,
+    callback: (li) => {
+      const msg = game.messages.get(li.dataset.messageId);
+      if (msg) rerollTest(msg.getRollData());
+    }
+  });
+
+  return options;
+}
+
+/**
+ * Optional extra context entry: toggle the roll details visibility.
+ * (Keeps parity with your old "showRolls" helper name.)
+ */
+export function showRolls(chatLog, options) {
+  options.push({
+    name: game.i18n.localize("CHAT.CONTEXT.TOGGLE_ROLLS") ?? "Toggle Rolls",
+    icon: '<i class="fa-solid fa-dice"></i>',
+    condition: (li) => !!li.dataset.messageId,
+    callback: (li) => {
+      const details = document.querySelector(
+        `.message[data-message-id="${li.dataset.messageId}"] .dice-rolls`
+      );
+      if (!details) return;
+      const visible = getComputedStyle(details).display !== "none";
+      details.style.display = visible ? "none" : "block";
+    }
+  });
+}
+
+/**
+ * Read damage rows from the message DOM and apply to selected tokens.
+ */
+function applyChatCardDamageFromLi(li, multiplier = 1) {
+  const msgEl = document.querySelector(`.message[data-message-id="${li.dataset.messageId}"]`);
+  if (!msgEl) return;
+
+  const amount = Array.from(msgEl.querySelectorAll(".damage-total"));
+  const location = Array.from(msgEl.querySelectorAll(".damage-location"));
+  const penetration = Array.from(msgEl.querySelectorAll(".damage-penetration"));
+  const type = Array.from(msgEl.querySelectorAll(".damage-type"));
+  const righteousFury = Array.from(msgEl.querySelectorAll(".damage-righteous-fury"));
+
+  const len = Math.max(amount.length, location.length, penetration.length, type.length, righteousFury.length);
+  const damages = [];
+  for (let i = 0; i < len; i++) {
+    damages.push({
+      amount: Number((amount[i]?.textContent ?? "0").trim()) * multiplier,
+      location: location[i]?.dataset?.location ?? "",
+      penetration: Number((penetration[i]?.textContent ?? "0").trim()),
+      type: (type[i]?.textContent ?? "").trim(),
+      righteousFury: (righteousFury[i]?.textContent ?? "").trim()
+    });
+  }
+
+  return Promise.all(
+    canvas.tokens.controlled.map(t => t.actor?.applyDamage(damages))
+  );
+}
+
+/**
+ * Reroll using prior rollData; spend Fate if available.
  */
 function rerollTest(rollData) {
-    let actor = game.actors.get(rollData.ownerId);
-    actor.update({ "system.fate.value": actor.fate.value -1 });
-    delete rollData.damages; // Reset so no old data is shown on failure
+  const actor = game.actors.get(rollData.ownerId);
+  if (!actor) return;
 
-    rollData.isReRoll = true;
-    if (rollData.isCombatRoll) {
-    // All the regexes in this are broken once retrieved from the chatmessage
-    // No idea why this happens so we need to fetch them again so the roll works correctly
-        rollData.attributeBoni = actor.attributeBoni;
-        return combatRoll(rollData);
-    } else {
-        return commonRoll(rollData);
-    }
+  // Spend Fate (adjust if your data model differs)
+  actor.update({ "system.fate.value": (actor.fate?.value ?? actor.system?.fate?.value ?? 0) - 1 });
+
+  // Reset old damage block so failures don't show stale UI
+  delete rollData.damages;
+
+  rollData.isReRoll = true;
+  if (rollData.isCombatRoll) {
+    // Reinject regex-dependent props that get lost in message flags
+    rollData.attributeBoni = actor.attributeBoni;
+    return combatRoll(rollData);
+  } else {
+    return commonRoll(rollData);
+  }
 }
 
 /**
- * Rolls a Test for the Selected Actor
- * @param {Event} ev
+ * Roll a Test (Evasion) for the currently selected actor, launched from a chat card.
  */
 function onTestClick(ev) {
-    let actor = game.macro.getActor();
-    let id = $(ev.currentTarget).parents(".message").attr("data-message-id");
-    let msg = game.messages.get(id);
-    let rollData = msg.getRollData();
+  const actor = game.macro.getActor?.();
+  const msgId = ev.currentTarget.closest(".message")?.dataset.messageId;
+  const msg = msgId ? game.messages.get(msgId) : null;
+  const rollData = msg?.getRollData();
 
-    if (!actor) {
-        ui.notifications.warn(`${game.i18n.localize("NOTIFICATION.MACRO_ACTOR_NOT_FOUND")}`);
-        return;
-    }
-    let evasions = {
-        dodge : DarkHeresyUtil.createSkillRollData(actor, "dodge"), 
-        parry : DarkHeresyUtil.createSkillRollData(actor, "parry"), 
-        deny : DarkHeresyUtil.createCharacteristicRollData(actor, "willpower"),
-        selected : "dodge"
-    }
-    rollData.evasions = evasions;
-    rollData.isEvasion = true;
-    rollData.isDamageRoll = false;
-    rollData.isCombatRoll = false;
-    if (rollData.psy) rollData.psy.display = false;
-    rollData.name = game.i18n.localize("DIALOG.EVASION");
-    prepareCommonRoll(rollData);
+  if (!actor || !rollData) {
+    ui.notifications?.warn(game.i18n.localize("NOTIFICATION.MACRO_ACTOR_NOT_FOUND"));
+    return;
+  }
+
+  const evasions = {
+    dodge: DarkHeresyUtil.createSkillRollData(actor, "dodge"),
+    parry: DarkHeresyUtil.createSkillRollData(actor, "parry"),
+    deny:  DarkHeresyUtil.createCharacteristicRollData(actor, "willpower"),
+    selected: "dodge"
+  };
+
+  rollData.evasions = evasions;
+  rollData.isEvasion = true;
+  rollData.isDamageRoll = false;
+  rollData.isCombatRoll = false;
+  if (rollData.psy) rollData.psy.display = false;
+  rollData.name = game.i18n.localize("DIALOG.EVASION");
+
+  prepareCommonRoll(rollData);
 }
 
 /**
- * Rolls an Evasion chat for the currently selected character from the chatcard
- * @param {Event} ev
- * @returns {Promise}
+ * Roll damage from the chat card.
  */
 function onDamageClick(ev) {
-    let id = $(ev.currentTarget).parents(".message").attr("data-message-id");
-    let msg = game.messages.get(id);
-    let rollData = msg.getRollData();
-    rollData.isEvasion = false;
-    rollData.isCombatRoll = false;
-    rollData.isDamageRoll = true;
-    return damageRoll(rollData);
+  const msgId = ev.currentTarget.closest(".message")?.dataset.messageId;
+  const msg = msgId ? game.messages.get(msgId) : null;
+  const rollData = msg?.getRollData();
+  if (!rollData) return;
+
+  rollData.isEvasion = false;
+  rollData.isCombatRoll = false;
+  rollData.isDamageRoll = true;
+
+  return damageRoll(rollData);
 }
 
 /**
- * Reloads the associated weapon who is empty Without considering ammo in the users inventory
- * @param {Event} ev
+ * Reload the associated weapon (ignoring inventory ammo).
  */
 async function onReloadClick(ev) {
-    let id = $(ev.currentTarget).parents(".message").attr("data-message-id");
-    let msg = game.messages.get(id);
-    let rollData = msg.getRollData();
-    const weapon = game.actors.get(rollData.ownerId)?.items?.get(rollData.itemId);
-    await weapon.update({"system.clip.value": rollData.clip.max});
+  const msgId = ev.currentTarget.closest(".message")?.dataset.messageId;
+  const msg = msgId ? game.messages.get(msgId) : null;
+  const rollData = msg?.getRollData();
+  if (!rollData) return;
+
+  const weapon = game.actors.get(rollData.ownerId)?.items?.get(rollData.itemId);
+  if (weapon) await weapon.update({ "system.clip.value": rollData.clip?.max ?? 0 });
 }
 
-export const showRolls =html => {
-    // Show dice rolls on click
-    html.on("click", ".dark-heresy.chat.roll>.background.border", onChatRollClick);
-};
-
 /**
- * Show/hide dice rolls when a chat message is clicked.
- * @param {Event} event
+ * Toggle visibility of the dice roll details inside the clicked message.
  */
 function onChatRollClick(event) {
-    event.preventDefault();
-    let roll = $(event.currentTarget.parentElement);
-    let tip = roll.find(".dice-rolls");
-    if ( !tip.is(":visible") ) tip.slideDown(200);
-    else tip.slideUp(200);
+  event.preventDefault();
+  const messageEl = event.currentTarget.closest(".message") ?? event.target.closest(".message");
+  const tip = messageEl?.querySelector(".dice-rolls");
+  if (!tip) return;
+
+  const visible = getComputedStyle(tip).display !== "none";
+  tip.style.display = visible ? "none" : "block";
 }
